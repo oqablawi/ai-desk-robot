@@ -1,0 +1,3 @@
+# The display simulator currently uses only Python's standard library.
+# Optional Spotify OAuth and audio dependencies will be added in later phases.
+
