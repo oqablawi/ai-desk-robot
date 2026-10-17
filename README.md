@@ -6,12 +6,14 @@ A compact, stationary desktop robot companion with expressive screen eyes, voice
 
 **In progress — enclosure and hardware integration.**
 
-The current prototype is focused on the robot head: a small SolidWorks-designed enclosure for a 3.5-inch display, microphone, speaker, and Raspberry Pi-based controller. The Raspberry Pi Zero 2 W is not yet installed, so the software and electronics integration are being developed incrementally.
+The first functional head-shell foundation is now modeled in SolidWorks. It includes the rounded exterior, hollow 3 mm walls, an open service rear, and a centered display opening. Screen retention, Raspberry Pi mounts, ports, ventilation, neck connection, and rear-cover fasteners are still in progress.
+
+The Raspberry Pi Zero 2 W has been purchased and is awaiting delivery. The remaining Phase 1 components, including the 3.5-inch display, are available for physical measurement and fit testing.
 
 ## Goals
 
 - Build a reliable desk robot instead of a walking robot.
-- Learn practical robotics, electronics, Python, audio, networking, and AI integration.
+- Learn practical robotics, electronics, Python, audio, networking, CAD, and AI integration.
 - Document the work for a portfolio and resume.
 
 ## Planned capabilities
@@ -28,11 +30,19 @@ The current prototype is focused on the robot head: a small SolidWorks-designed 
 - [ROADMAP.md](ROADMAP.md) — phased build plan
 - [docs/hardware.md](docs/hardware.md) — parts and purchasing guidance
 - [docs/architecture.md](docs/architecture.md) — software and hardware architecture
+- [cad/Robot_Head_Main.SLDPRT](cad/Robot_Head_Main.SLDPRT) — current SolidWorks head-shell model
+- [cad/head_rough_draft_1.SLDPRT](cad/head_rough_draft_1.SLDPRT) — original rough enclosure draft
 - [src/](src/) — robot software
 
-## Design notes
+## Current CAD dimensions
 
-The first enclosure concept uses a removable rear cover so the electronics remain serviceable. The front head shell is designed around a 100 x 78 x 30 mm envelope with a centered 82 x 54 mm display opening. Dimensions will be revised after the physical display and electronics are test-fitted.
+- Head exterior: **120 × 90 × 52 mm**
+- Wall thickness: **3 mm**
+- Display opening: **74 × 49 mm**
+- Display-opening corner radius: **2 mm**
+- Rear: open for a later removable service cover
+
+These are prototype dimensions. Mounts and connector openings will be based on measurements of the physical hardware before printing.
 
 ## Safety and privacy
 

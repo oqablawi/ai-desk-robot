@@ -4,7 +4,8 @@
 - [x] Create repository
 - [x] Define scope
 - [x] Choose Raspberry Pi as primary computer
-- [ ] Purchase Phase 1 hardware
+- [x] Purchase Phase 1 hardware
+- [x] Start CAD enclosure development
 - [ ] Start a project journal
 
 ## Phase 1 — Development setup
@@ -41,9 +42,12 @@
 - [ ] Recover gracefully from Wi-Fi/API failures
 
 ## Phase 6 — Physical build
-- [ ] Measure components
-- [ ] Design and print an enclosure
-- [ ] Improve mounting, cable access, ventilation, and serviceability
+- [x] Create basic head-shell CAD foundation
+- [ ] Measure screen thickness, rear components, mounting holes, and connectors
+- [ ] Add screen retention features
+- [ ] Add Raspberry Pi mounts, ports, ventilation, and neck connection
+- [ ] Design removable rear cover and fasteners
+- [ ] Print and test-fit the enclosure
 - [ ] Assemble the prototype
 
 ## Phase 7 — Portfolio release
