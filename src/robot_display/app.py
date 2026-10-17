@@ -105,31 +105,113 @@ class RobotDisplayApp:
         }
         color = colors.get(self.state, CYAN)
 
-        for cx in (155, 325):
-            width = 92 + (8 * pulse if self.state == RobotState.LISTENING else 0)
-            height = max(5, 82 * (1.0 - blink))
-            top = 160 - height / 2
-            bottom = 160 + height / 2
-            self.canvas.create_oval(
-                cx - width / 2,
-                top,
-                cx + width / 2,
-                bottom,
-                fill=color,
-                outline="",
-            )
-            pupil = 30 if self.state != RobotState.HAPPY else 18
-            self.canvas.create_oval(
-                cx - pupil / 2,
-                160 - max(2, pupil * (1.0 - blink)) / 2,
-                cx + pupil / 2,
-                160 + max(2, pupil * (1.0 - blink)) / 2,
-                fill=BACKGROUND,
-                outline="",
-            )
+        # A softer face reads better than mechanical circles on the small screen.
+        self.canvas.create_oval(58, 78, 422, 256, fill="#0B1D27", outline="#15333F", width=2)
+
+        if self.state == RobotState.ERROR:
+            self._draw_error_eyes(color)
+        elif self.state in (RobotState.HAPPY, RobotState.SLEEPING) or blink > 0.82:
+            self._draw_closed_eyes(color, sleeping=self.state == RobotState.SLEEPING)
+        else:
+            gaze_x = 8 * math.sin((now - self.started) * 0.55)
+            if self.state == RobotState.THINKING:
+                gaze_x = 11
+            eye_scale = 1.08 if self.state == RobotState.LISTENING else 1.0
+            eye_height = max(8, 94 * eye_scale * (1.0 - blink))
+            for cx in (157, 323):
+                self._draw_cute_eye(cx, 158, 72 * eye_scale, eye_height, gaze_x, color)
+
+        self._draw_cheeks(color)
+        self._draw_mouth(now, color, pulse)
 
         label = self.state.value.upper()
-        self.canvas.create_text(240, 265, text=label, fill=MUTED, font=("Segoe UI", 10, "bold"))
+        self.canvas.create_text(240, 278, text=label, fill=MUTED, font=("Segoe UI", 9, "bold"))
+
+    def _draw_cute_eye(
+        self,
+        cx: float,
+        cy: float,
+        width: float,
+        height: float,
+        gaze_x: float,
+        color: str,
+    ) -> None:
+        """Draw a glossy rounded eye with a dark pupil and two highlights."""
+        self.canvas.create_oval(
+            cx - width / 2 - 5,
+            cy - height / 2 - 5,
+            cx + width / 2 + 5,
+            cy + height / 2 + 5,
+            fill="#12343F",
+            outline="",
+        )
+        self.canvas.create_oval(
+            cx - width / 2,
+            cy - height / 2,
+            cx + width / 2,
+            cy + height / 2,
+            fill=color,
+            outline="",
+        )
+        pupil_width = width * 0.46
+        pupil_height = max(4, height * 0.56)
+        self.canvas.create_oval(
+            cx + gaze_x - pupil_width / 2,
+            cy - pupil_height / 2 + 5,
+            cx + gaze_x + pupil_width / 2,
+            cy + pupil_height / 2 + 5,
+            fill="#06212A",
+            outline="",
+        )
+        if height > 24:
+            self.canvas.create_oval(cx + gaze_x - 10, cy - 22, cx + gaze_x + 4, cy - 8, fill=WHITE, outline="")
+            self.canvas.create_oval(cx + gaze_x + 8, cy - 4, cx + gaze_x + 15, cy + 3, fill="#B8FAFF", outline="")
+
+    def _draw_closed_eyes(self, color: str, sleeping: bool = False) -> None:
+        start = 200 if sleeping else 205
+        extent = 140 if sleeping else 130
+        for cx in (157, 323):
+            self.canvas.create_arc(
+                cx - 45,
+                130,
+                cx + 45,
+                194,
+                start=start,
+                extent=extent,
+                style="arc",
+                outline=color,
+                width=12,
+            )
+
+    def _draw_error_eyes(self, color: str) -> None:
+        for cx in (157, 323):
+            self.canvas.create_line(cx - 30, 128, cx + 30, 188, fill=color, width=12, capstyle="round")
+            self.canvas.create_line(cx + 30, 128, cx - 30, 188, fill=color, width=12, capstyle="round")
+
+    def _draw_cheeks(self, color: str) -> None:
+        if self.state in (RobotState.ERROR, RobotState.SLEEPING):
+            return
+        cheek = "#FF7895" if self.state == RobotState.HAPPY else "#B34F6A"
+        self.canvas.create_oval(84, 200, 130, 220, fill=cheek, outline="")
+        self.canvas.create_oval(350, 200, 396, 220, fill=cheek, outline="")
+
+    def _draw_mouth(self, now: float, color: str, pulse: float) -> None:
+        if self.state == RobotState.SLEEPING:
+            self.canvas.create_text(385, 100, text="z", fill=MUTED, font=("Segoe UI", 18, "bold"))
+            self.canvas.create_text(408, 76, text="z", fill=MUTED, font=("Segoe UI", 13, "bold"))
+            return
+        if self.state == RobotState.ERROR:
+            self.canvas.create_line(222, 223, 258, 211, fill=color, width=6, capstyle="round")
+            return
+        if self.state == RobotState.SPEAKING:
+            mouth_height = 18 + (14 * pulse)
+            self.canvas.create_oval(222, 211 - mouth_height / 2, 258, 211 + mouth_height / 2, fill=color, outline="")
+            self.canvas.create_oval(230, 216, 250, 224, fill="#FF7895", outline="")
+            return
+        if self.state == RobotState.THINKING:
+            self.canvas.create_oval(233, 207, 247, 221, fill=color, outline="")
+            return
+        self.canvas.create_arc(216, 190, 264, 228, start=200, extent=140, style="arc", outline=color, width=6)
 
     def _draw_spotify(self, now: float) -> None:
         if now - self.last_playback_update >= 1.0 or self.playback is None:
