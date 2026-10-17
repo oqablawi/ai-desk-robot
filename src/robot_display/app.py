@@ -110,12 +110,12 @@ class RobotDisplayApp:
 
         if self.state == RobotState.ERROR:
             self._draw_error_eyes(color)
-        elif self.state in (RobotState.HAPPY, RobotState.SLEEPING) or blink > 0.82:
+        elif self.state == RobotState.THINKING:
+            self._draw_thinking_eyes(now)
+        elif self.state == RobotState.SLEEPING or blink > 0.82:
             self._draw_closed_eyes(color, sleeping=self.state == RobotState.SLEEPING)
         else:
             gaze_x = 8 * math.sin((now - self.started) * 0.55)
-            if self.state == RobotState.THINKING:
-                gaze_x = 11
             eye_scale = 1.08 if self.state == RobotState.LISTENING else 1.0
             eye_height = max(8, 94 * eye_scale * (1.0 - blink))
             for cx in (157, 323):
@@ -188,10 +188,30 @@ class RobotDisplayApp:
             self.canvas.create_line(cx - 30, 128, cx + 30, 188, fill=color, width=12, capstyle="round")
             self.canvas.create_line(cx + 30, 128, cx - 30, 188, fill=color, width=12, capstyle="round")
 
+    def _draw_thinking_eyes(self, now: float) -> None:
+        """Use rotating dots as eyes, inspired by the Windows busy indicator."""
+        palette = ("#3A2A53", "#4C376B", "#60458A", "#7755AA", "#9068CA", "#AA7FE9", "#C19CFF", "#D6BBFF")
+        active_step = int(now * 10) % len(palette)
+        for cx in (157, 323):
+            for index in range(8):
+                angle = ((index / 8) * math.tau) - (math.pi / 2)
+                x = cx + math.cos(angle) * 34
+                y = 158 + math.sin(angle) * 34
+                brightness = (index - active_step) % 8
+                radius = 5 + ((7 - brightness) * 0.45)
+                self.canvas.create_oval(
+                    x - radius,
+                    y - radius,
+                    x + radius,
+                    y + radius,
+                    fill=palette[7 - brightness],
+                    outline="",
+                )
+
     def _draw_cheeks(self, color: str) -> None:
-        if self.state in (RobotState.ERROR, RobotState.SLEEPING):
+        if self.state != RobotState.HAPPY:
             return
-        cheek = "#FF7895" if self.state == RobotState.HAPPY else "#B34F6A"
+        cheek = "#FF7895"
         self.canvas.create_oval(84, 200, 130, 220, fill=cheek, outline="")
         self.canvas.create_oval(350, 200, 396, 220, fill=cheek, outline="")
 
