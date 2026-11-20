@@ -1,3 +1,2 @@
-# The display simulator currently uses only Python's standard library.
-# Optional Spotify OAuth and audio dependencies will be added in later phases.
-
+# Runtime intentionally uses only Python's standard library.
+# On Raspberry Pi OS install tkinter with: sudo apt install python3-tk
