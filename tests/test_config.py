@@ -14,6 +14,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.mode, "demo")
         self.assertFalse(config.fullscreen)
         self.assertEqual(config.scale, 2)
+        self.assertEqual(config.start_screen, "idle")
+        self.assertIsNone(config.xai_api_key)
 
     def test_dotenv_does_not_replace_existing_environment(self):
         with tempfile.TemporaryDirectory() as folder:

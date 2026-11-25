@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=AI Desk Robot
+Comment=Desk robot face display
+Exec=__PROJECT_DIR__/scripts/start_robot.sh
+Path=__PROJECT_DIR__
+Terminal=false
+X-GNOME-Autostart-enabled=true

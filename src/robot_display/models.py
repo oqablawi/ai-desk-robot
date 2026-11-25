@@ -34,3 +34,32 @@ class PlaybackInfo:
         seconds = max(0, milliseconds // 1000)
         return f"{seconds // 60}:{seconds % 60:02d}"
 
+
+
+# Face expressions, plus the music screen.
+FACE_MODES = {
+    "idle": RobotState.IDLE,
+    "listening": RobotState.LISTENING,
+    "thinking": RobotState.THINKING,
+    "speaking": RobotState.SPEAKING,
+    "happy": RobotState.HAPPY,
+    "sleeping": RobotState.SLEEPING,
+    "error": RobotState.ERROR,
+}
+MODES = (*FACE_MODES, "music")
+
+# Older names still accepted so earlier scripts keep working.
+MODE_ALIASES = {
+    "eyes": "idle",
+    "face": "idle",
+    "spotify": "music",
+}
+
+
+def normalize_mode(mode: str) -> str:
+    name = mode.strip().lower()
+    name = MODE_ALIASES.get(name, name)
+    if name not in MODES:
+        allowed = ", ".join(MODES)
+        raise ValueError(f"Unknown mode: {mode}. Use one of: {allowed}")
+    return name

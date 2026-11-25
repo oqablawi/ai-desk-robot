@@ -52,6 +52,14 @@ class BackgroundPlaybackProvider:
     def seek(self, fraction: float) -> None:
         self._actions.put(("seek", (fraction,)))
 
+    @property
+    def is_demo(self) -> bool:
+        return getattr(self.provider, "is_demo", False)
+
+    @property
+    def index(self) -> int:
+        return getattr(self.provider, "index", 0)
+
     def close(self) -> None:
         self._stop.set()
 
@@ -72,6 +80,7 @@ class BackgroundPlaybackProvider:
 class DemoSpotifyProvider:
     """Local fake playback source used before Spotify authorization is configured."""
 
+    is_demo = True
     TRACKS = (
         PlaybackInfo("Robot Dreams", "Omar's Desk Robot", 214_000, 0, True),
         PlaybackInfo("Little Orbit", "The Desktop Sessions", 183_000, 0, True),
@@ -83,7 +92,8 @@ class DemoSpotifyProvider:
         self._updated = clock()
         self.index = 0
         self._progress_ms = 0.0
-        self.is_playing = True
+        # Start paused so the laptop opens on the face, not the music screen.
+        self.is_playing = False
 
     def _advance(self) -> None:
         now = self._clock()
@@ -122,6 +132,7 @@ class DemoSpotifyProvider:
 class SpotifyWebApiProvider:
     """Spotify metadata/control client with refreshable PKCE tokens."""
 
+    is_demo = False
     ENDPOINT = "https://api.spotify.com/v1/me/player"
     TOKEN_ENDPOINT = "https://accounts.spotify.com/api/token"
 

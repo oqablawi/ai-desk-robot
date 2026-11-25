@@ -1,15 +1,18 @@
 [Unit]
 Description=AI Desk Robot Display
-After=graphical-session.target network-online.target
-Wants=network-online.target
+After=graphical-session.target
+PartOf=graphical-session.target
+Wants=graphical-session.target
 
 [Service]
 Type=simple
 WorkingDirectory=__PROJECT_DIR__
 Environment=PYTHONPATH=__PROJECT_DIR__/src
-ExecStart=__PROJECT_DIR__/.venv/bin/python -m robot_display
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=%h/.Xauthority
+ExecStart=__PROJECT_DIR__/scripts/start_robot.sh
 Restart=on-failure
 RestartSec=3
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target

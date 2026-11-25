@@ -8,8 +8,9 @@ from tkinter import font as tkfont
 from typing import Callable
 
 from .models import PlaybackInfo, RobotState
+from .models import FACE_MODES
+from .robot import Robot
 from .spotify import DemoSpotifyProvider, PlaybackProvider
-from .simulator import SimulatorController
 
 
 WIDTH = 480
@@ -19,10 +20,29 @@ CYAN = "#41F6FF"
 MUTED = "#8CA5B2"
 WHITE = "#ECF7FA"
 
+# Use the first family the computer actually has. Segoe UI is common on
+# Windows; the Pi typically has DejaVu Sans or Liberation Sans.
+FONT_CANDIDATES = (
+    "Segoe UI",
+    "Ubuntu",
+    "DejaVu Sans",
+    "Liberation Sans",
+    "Helvetica",
+    "Arial",
+)
+
+
+def pick_font_family(root: tk.Misc) -> str:
+    available = set(tkfont.families(root))
+    for name in FONT_CANDIDATES:
+        if name in available:
+            return name
+    return "TkDefaultFont"
+
 
 class RobotDisplayApp:
     def __init__(self, provider: PlaybackProvider | None = None, scale: int = 2,
-                 fullscreen: bool = False) -> None:
+                 fullscreen: bool = False, robot: Robot | None = None) -> None:
         if scale not in (1, 2, 3):
             raise ValueError("Scale must be 1, 2 or 3")
         self.scale = scale
@@ -30,7 +50,7 @@ class RobotDisplayApp:
         self._scale_x = float(scale)
         self._scale_y = float(scale)
         self.root = tk.Tk()
-        self.root.title("AI Desk Robot Display Simulator")
+        self.root.title("AI Desk Robot")
         self.root.geometry(f"{WIDTH * scale}x{HEIGHT * scale}")
         self.root.resizable(False, False)
         self.root.configure(bg=BACKGROUND)
@@ -45,9 +65,11 @@ class RobotDisplayApp:
         self.canvas.pack(fill="both", expand=True)
 
         self.provider = provider or DemoSpotifyProvider()
-        self.controller = SimulatorController()
+        self.robot = robot or Robot()
+        self.robot.attach_display()
         self.help_open = False
         self.hitboxes: list[tuple[tuple[float, float, float, float], Callable[[], None]]] = []
+        self._font_family = pick_font_family(self.root)
         self._fonts: dict[tuple[int, str, float], tkfont.Font] = {}
         self._frame_id: str | None = None
         self.started = time.monotonic()
@@ -55,40 +77,62 @@ class RobotDisplayApp:
         self.next_blink = random.uniform(2.5, 5.0)
         self.blink_started: float | None = None
         self.playback: PlaybackInfo | None = None
+        self.voice = None
+        self._ptt_held = False
         self.root.bind("<KeyPress>", self._key)
+        self.root.bind("<KeyRelease>", self._key_release)
         self.canvas.bind("<Button-1>", self._click)
         self.canvas.bind("<Motion>", self._hover)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
+    def attach_voice(self, voice) -> None:
+        self.voice = voice
+
     @property
     def mode(self) -> str:
-        return self.controller.mode
+        return self.robot.mode
 
     @property
     def state(self) -> RobotState:
-        return self.controller.state
+        return self.robot.state
 
     def set_mode(self, mode: str) -> None:
-        self.controller.set_mode(mode)
+        """Change the screen. Call this from the Tk thread (keys or tests).
+
+        Background AI code should call robot.set_mode() instead. Those
+        calls stay on a queue until the display loop applies them.
+        """
+        self.robot.set_mode(mode)
+        self.robot.apply_pending()
+        if self.mode in FACE_MODES:
+            self.blink_started = None
+            self.last_blink = time.monotonic()
+
+    def say(self, text: str) -> None:
+        self.robot.say(text)
+        self.robot.apply_pending()
 
     def set_state(self, state: RobotState) -> None:
-        self.controller.set_state(state)
-        self.blink_started = None
-        self.last_blink = time.monotonic()
+        self.set_mode(state.value)
 
-    def toggle_demo_playback(self, _event: tk.Event | None = None) -> None:
+    def toggle_playback(self, _event: tk.Event | None = None) -> None:
         self.provider.toggle_playback()
 
     def close(self) -> None:
         if self._frame_id is not None:
             self.root.after_cancel(self._frame_id)
             self._frame_id = None
+        if self.voice is not None:
+            self.voice.close()
+            self.voice = None
         close_provider = getattr(self.provider, "close", None)
         if close_provider:
             close_provider()
         self.root.destroy()
 
     def _key(self, event: tk.Event) -> None:
+        # Keyboard shortcuts are a developer fallback. The real robot
+        # will change modes through robot.set_mode(), not on-screen buttons.
         key = event.keysym.lower()
         if key == "escape":
             if self.help_open:
@@ -101,38 +145,43 @@ class RobotDisplayApp:
             return
         if self.help_open:
             return
+        if key in ("v", "p"):
+            # Hold V (or P) to talk. Ignore keyboard auto-repeat.
+            if not self._ptt_held and self.voice is not None:
+                self._ptt_held = True
+                self.voice.press()
+            return
         if key in "1234567" and len(key) == 1:
-            self.set_state(list(RobotState)[int(key) - 1])
+            self.set_mode(list(FACE_MODES)[int(key) - 1])
         elif key == "e":
-            self.set_mode("eyes")
+            self.set_mode("idle")
         elif key == "s":
-            self.set_mode("spotify")
+            self.set_mode("music")
         elif key == "t":
-            self.controller.start_demo()
+            self.robot.start_demo()
         elif key == "space":
-            if self.mode == "talk":
-                self._toggle_talk()
-            else:
-                self.toggle_demo_playback()
+            self.toggle_playback()
         elif key in ("left", "right"):
             direction = 1 if key == "right" else -1
-            if self.mode == "eyes":
-                self._cycle_expression(direction)
-            elif self.mode == "spotify":
+            if self.mode == "music":
                 self.provider.skip(direction)
+            else:
+                self._cycle_expression(direction)
+
+    def _key_release(self, event: tk.Event) -> None:
+        key = event.keysym.lower()
+        if key in ("v", "p") and self._ptt_held:
+            self._ptt_held = False
+            if self.voice is not None:
+                self.voice.release()
 
     def _cycle_expression(self, direction: int) -> None:
-        states = list(RobotState)
-        self.set_state(states[(states.index(self.state) + direction) % len(states)])
-
-    def _toggle_talk(self) -> None:
-        if self.controller.demo_running:
-            self.controller.cancel_demo()
-        else:
-            self.controller.start_demo()
+        names = list(FACE_MODES)
+        current = self.mode if self.mode in FACE_MODES else "idle"
+        self.set_mode(names[(names.index(current) + direction) % len(names)])
 
     def _action_at(self, x: float, y: float) -> Callable[[], None] | None:
-        if not self.help_open and self.mode == "spotify" and 24 <= x <= 456 and 223 <= y <= 241:
+        if not self.help_open and self.mode == "music" and 24 <= x <= 456 and 223 <= y <= 241:
             return lambda: self.provider.seek((x - 24) / 432)
         for (left, top, right, bottom), action in reversed(self.hitboxes):
             if left <= x <= right and top <= y <= bottom:
@@ -152,8 +201,12 @@ class RobotDisplayApp:
         display_scale = min(self._scale_x, self._scale_y)
         key = (size, weight, round(display_scale, 3))
         if key not in self._fonts:
-            self._fonts[key] = tkfont.Font(root=self.root, family="Segoe UI",
-                                           size=-max(1, round(size * display_scale)), weight=weight)
+            self._fonts[key] = tkfont.Font(
+                root=self.root,
+                family=self._font_family,
+                size=-max(1, round(size * display_scale)),
+                weight=weight,
+            )
         return self._fonts[key]
 
     def _text(self, x: float, y: float, text: str, size: int = 12, color: str = WHITE,
@@ -179,8 +232,12 @@ class RobotDisplayApp:
         self.root.mainloop()
 
     def _frame(self) -> None:
-        if self.controller.update():
-            self.provider.play()
+        playback = self.provider.current()
+        self.robot.update(playback, play=self.provider.play)
+        # If music has no track at all, never leave a blank screen.
+        if self.robot.mode == "music" and self.provider.current() is None:
+            self.robot.set_mode("idle")
+            self.robot.apply_pending()
         self._render(time.monotonic())
         self._frame_id = self.root.after(33, self._frame)
 
@@ -196,10 +253,8 @@ class RobotDisplayApp:
             self._scale_y = float(self.scale)
         self.canvas.delete("all")
         self.hitboxes.clear()
-        if self.mode == "spotify":
+        if self.mode == "music":
             self._draw_spotify(now)
-        elif self.mode == "talk":
-            self._draw_talk(now)
         else:
             self._draw_eyes(now)
         if self.help_open:
@@ -228,7 +283,7 @@ class RobotDisplayApp:
             return 0.0
         return math.sin((elapsed / 0.22) * math.pi)
 
-    def _draw_face(self, now: float, compact: bool = False) -> None:
+    def _draw_face(self, now: float) -> None:
         before = set(self.canvas.find_all())
         blink = self._blink_amount(now)
         pulse = (math.sin((now - self.started) * 2.0) + 1.0) / 2.0
@@ -257,17 +312,10 @@ class RobotDisplayApp:
 
         for item in set(self.canvas.find_all()) - before:
             self.canvas.addtag_withtag("face", item)
-        if compact:
-            self.canvas.scale("face", 240, 158, 0.48, 0.48)
-            self.canvas.move("face", 0, -38)
-        else:
-            self.canvas.move("face", 0, -24)
+        self.canvas.move("face", 0, -24)
 
     def _draw_eyes(self, now: float) -> None:
         self._draw_face(now)
-        # The entire display is the character. Tap either half to change expression.
-        self.hitboxes.append(((0, 0, 240, 320), lambda: self._cycle_expression(-1)))
-        self.hitboxes.append(((240, 0, 480, 320), lambda: self._cycle_expression(1)))
 
     def _draw_cute_eye(
         self,
@@ -374,18 +422,21 @@ class RobotDisplayApp:
     def _draw_spotify(self, now: float) -> None:
         track = self.playback = self.provider.current()
         if track is None:
-            self._text(240, 128, "NOTHING PLAYING", 20, WHITE, weight="bold")
-            self._text(240, 157, "Start Spotify on your phone or computer", 11, MUTED)
+            # Safety net: never paint an empty music frame.
+            self._draw_eyes(now)
             return
-        index = getattr(self.provider, "index", 0)
-        self._draw_cover(index)
+        is_demo = getattr(self.provider, "is_demo", False)
+        if is_demo:
+            index = getattr(self.provider, "index", 0) % 3
+            self._draw_cover(index)
+        else:
+            self._draw_art_placeholder(track)
         self._text(186, 68, "NOW PLAYING" if track.is_playing else "PAUSED", 10, CYAN, "w", "bold")
         self._text(186, 99, track.title, 23, WHITE, "w", "bold", max_width=270)
         self._text(186, 126, track.artist, 12, MUTED, "w", max_width=270)
-        self._text(186, 148, f"DESK SESSIONS   /   0{index + 1}", 10, MUTED, "w")
 
         self._button((210, 173, 260, 211), "|‹", lambda: self.provider.skip(-1))
-        self._button((270, 173, 340, 211), "Ⅱ" if track.is_playing else "▶", self.toggle_demo_playback, True)
+        self._button((270, 173, 340, 211), "Ⅱ" if track.is_playing else "▶", self.toggle_playback, True)
         self._button((350, 173, 400, 211), "›|", lambda: self.provider.skip(1))
         left, right, y = 24, 456, 232
         self.canvas.create_line(left, y, right, y, fill="#1B3542", width=4, capstyle="round")
@@ -395,7 +446,8 @@ class RobotDisplayApp:
         self.canvas.create_oval(position - 4, y - 4, position + 4, y + 4, fill=WHITE, outline="")
         self._text(left, 253, track.format_time(track.progress_ms), 11, MUTED, "w")
         self._text(right, 253, track.format_time(track.duration_ms), 11, MUTED, "e")
-        self._text(240, 253, "Demo tracks · no audio / Spotify connection", 10, MUTED)
+        if is_demo:
+            self._text(240, 253, "Demo tracks · no audio or Spotify login", 10, MUTED)
 
     def _draw_cover(self, index: int) -> None:
         """Original geometric demo artwork; no remote assets or album downloads."""
@@ -416,82 +468,32 @@ class RobotDisplayApp:
             self.canvas.create_oval(59, 86, 131, 158, fill=accent, outline="")
             for y in range(136, 183, 8):
                 self.canvas.create_rectangle(36, y, 154, y + 4, fill=background, outline="")
-        self._text(37, 194, ("ROBOT DREAMS", "LITTLE ORBIT", "AFTER HOURS")[index], 10, WHITE, "w", "bold")
+        titles = ("ROBOT DREAMS", "LITTLE ORBIT", "AFTER HOURS")
+        self._text(37, 194, titles[index % 3], 10, WHITE, "w", "bold")
 
-    def _draw_header(self) -> None:
-        self.canvas.create_rectangle(18, 15, 27, 24, fill=CYAN, outline="")
-        self._text(36, 20, "DESK//UNIT", 11, WHITE, "w", "bold")
-        self.canvas.create_rectangle(151, 10, 205, 30, fill="#25250F", outline="#FFD400")
-        self._text(178, 20, "ONLINE", 8, CYAN, weight="bold")
-        self._text(409, 20, time.strftime("%I:%M %p").lstrip("0"), 11, MUTED, "e")
-        self._button((430, 6, 462, 34), "?", lambda: setattr(self, "help_open", True))
-        self.canvas.create_line(18, 40, 462, 40, fill="#5D5A22")
-        self.canvas.create_line(18, 43, 112, 43, fill="#FFD400", width=2)
-
-    def _draw_navigation(self) -> None:
-        self.canvas.create_line(18, 281, 462, 281, fill="#3E3B18")
-        self._text(22, 298, "MODE", 8, MUTED, "w", "bold")
-        for bounds, mode, code, label in (
-            ((72, 287, 178, 309), "eyes", "01", "OPTIC"),
-            ((184, 287, 290, 309), "spotify", "02", "TAPE"),
-            ((296, 287, 402, 309), "talk", "03", "COMMS"),
-        ):
-            active = self.mode == mode
-            x1, y1, x2, y2 = bounds
-            self.canvas.create_rectangle(x1, y1, x2, y2,
-                                         fill="#FFD400" if active else "#0C0E09",
-                                         outline="#FFD400" if active else "#393B29")
-            self._text(x1 + 10, 298, code, 7, "#080A07" if active else "#6F705D", "w", "bold")
-            self._text(x1 + 35, 298, label, 8, "#080A07" if active else MUTED, "w", "bold")
-            self.hitboxes.append((bounds, lambda m=mode: self.set_mode(m)))
-        self._text(456, 298, "SEL", 7, "#5D5A22", "e", "bold")
-
-    def _draw_crt_texture(self) -> None:
-        """Subtle phosphor scanlines and registration marks for a retro terminal feel."""
-        for y in range(48, 278, 8):
-            self.canvas.create_line(10, y, 470, y, fill="#0D100A")
-        mark = "#4A471A"
-        for x, y, sx, sy in ((12, 50, 1, 1), (468, 50, -1, 1),
-                             (12, 270, 1, -1), (468, 270, -1, -1)):
-            self.canvas.create_line(x, y, x + 12 * sx, y, fill=mark, width=2)
-            self.canvas.create_line(x, y, x, y + 12 * sy, fill=mark, width=2)
-
-    def _draw_talk(self, now: float) -> None:
-        running = self.controller.demo_running
-        self._text(24, 60, "A LITTLE CONVERSATION", 11, WHITE, "w", "bold")
-        self._text(456, 60, "SCRIPTED DEMO", 10, MUTED, "e")
-        self._draw_face(now, compact=True)
-        labels = {
-            RobotState.LISTENING: 'You: “Play something mellow.”',
-            RobotState.THINKING: "Choosing a demo track…",
-            RobotState.SPEAKING: 'Robot: “Here is a little desk music.”',
-            RobotState.HAPPY: "Opening the music screen…",
-        }
-        self._text(240, 183, labels.get(self.state, "See how a voice request will feel.") if running
-                   else "See how a voice request will feel.", 15, WHITE)
-        self._text(240, 207, "Simulated listening & speech · microphone stays off", 10, MUTED)
-        self._button((140, 225, 340, 260), "STOP DEMO" if running else "TRY CONVERSATION",
-                     self._toggle_talk, True)
-        if running:
-            phase = [state for _, state in self.controller.PHASES].index(self.state)
-            for i in range(4):
-                x = 216 + i * 16
-                self.canvas.create_oval(x, 164, x + 5, 169, fill=CYAN if i == phase else "#31434F", outline="")
+    def _draw_art_placeholder(self, track: PlaybackInfo) -> None:
+        # TODO: show album art from track.album_art_url once we can decode
+        # JPEG images on the Pi without adding new packages. Tk PhotoImage
+        # only opens PNG and GIF, and Spotify art is usually JPEG.
+        self.canvas.create_rectangle(24, 66, 166, 211, fill="#173F4B", outline="")
+        initial = (track.title or "?").strip()[:1].upper() or "?"
+        self._text(95, 138, initial, 48, CYAN, weight="bold")
 
     def _draw_help(self) -> None:
         self.hitboxes.clear()
         self.canvas.create_rectangle(12, 46, 468, 313, fill="#101F2A", outline="#294451")
-        self._text(30, 70, "Your robot, on your laptop", 19, WHITE, "w", "bold")
+        self._text(30, 70, "Developer controls", 19, WHITE, "w", "bold")
         rows = (
+            ("Hold V", "Push-to-talk (keyboard fallback)"),
             ("E / S", "Face / music screen"),
-            ("1–7", "Idle · listen · think · speak · happy · sleep · error"),
-            ("← / →", "Change expression or skip demo track"),
-            ("Space", "Play / pause music; start / stop talk demo"),
-            ("T", "Run the scripted conversation"),
+            ("1-7", "Idle · listen · think · speak · happy · sleep · error"),
+            ("Left / Right", "Change expression or skip demo track"),
+            ("Space", "Play / pause music"),
+            ("T", "Run the scripted mode demo"),
             ("H / Esc", "Close help; Esc outside help exits"),
         )
         for i, (key, meaning) in enumerate(rows):
-            self._text(30, 104 + 23 * i, key, 11, CYAN, "w", "bold")
-            self._text(97, 104 + 23 * i, meaning, 10, WHITE, "w")
-        self._text(240, 251, "480 × 320 layout · fictional music · no microphone or cloud AI", 10, MUTED)
+            self._text(30, 100 + 20 * i, key, 10, CYAN, "w", "bold")
+            self._text(150, 100 + 20 * i, meaning, 10, WHITE, "w")
+        self._text(240, 251, "Grok chooses the mode · keys are a laptop fallback", 10, MUTED)
         self._button((166, 272, 314, 302), "BACK TO ROBOT", lambda: setattr(self, "help_open", False), True)
