@@ -1,2 +1,7 @@
-# Runtime intentionally uses only Python's standard library.
-# On Raspberry Pi OS install tkinter with: sudo apt install python3-tk
+# Runtime uses Python's standard library plus a few system packages.
+# On Raspberry Pi OS the install script already installs these:
+#   sudo apt install python3-tk python3-gpiozero alsa-utils espeak-ng
+# No pip packages are required for the display, Grok, or voice loop.
+#
+# On the Pi, after copying the repo:
+#   bash scripts/install_pi.sh

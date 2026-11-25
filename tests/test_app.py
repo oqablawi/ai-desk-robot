@@ -1,15 +1,24 @@
-"""Render and interaction checks with real Tk; skipped without a desktop display."""
+"""Render and interaction checks with real Tk; skipped without tkinter or a display."""
 import time
-import tkinter as tk
 import unittest
 from types import SimpleNamespace
 
-from robot_display.app import RobotDisplayApp, HEIGHT, WIDTH
 from robot_display.models import RobotState
+
+try:
+    import tkinter as tk
+    from robot_display.app import HEIGHT, WIDTH, RobotDisplayApp
+except ImportError:  # Laptop tests still run when Tk is not installed.
+    tk = None
+    RobotDisplayApp = None
+    HEIGHT = 320
+    WIDTH = 480
 
 
 class AppTests(unittest.TestCase):
     def setUp(self):
+        if tk is None or RobotDisplayApp is None:
+            self.skipTest("tkinter is not installed")
         try:
             self.app = RobotDisplayApp(scale=2)
         except tk.TclError as exc:
@@ -28,10 +37,18 @@ class AppTests(unittest.TestCase):
         for scale in (1, 2, 3):
             self.app.scale = scale
             self.app._fonts.clear()
-            for mode in ("eyes", "spotify", "talk"):
+            for mode in ("idle", "music"):
                 self.app.set_mode(mode)
                 self.render()
                 self.assert_text_visible(scale)
+            # Nothing-playing should still draw the face, not a blank screen.
+            self.app.provider.is_playing = False
+            original = self.app.provider.current
+            self.app.provider.current = lambda: None
+            self.app.set_mode("music")
+            self.render()
+            self.assert_text_visible(scale)
+            self.app.provider.current = original
             for state in RobotState:
                 self.app.set_state(state)
                 self.render()
@@ -52,11 +69,11 @@ class AppTests(unittest.TestCase):
                     self.assertLessEqual(x2, WIDTH * scale)
                     self.assertLessEqual(y2, HEIGHT * scale)
 
-    def test_scaled_clicks_cycle_expression_and_programmatic_modes_work(self):
-        self.render()
-        self.app._click(SimpleNamespace(x=700, y=300))
+    def test_scaled_clicks_and_programmatic_modes_work(self):
+        self.app.set_mode("listening")
         self.assertEqual(self.app.state, RobotState.LISTENING)
-        self.app.set_mode("spotify")
+        self.app.provider.play()
+        self.app.set_mode("music")
         self.render()
         self.app._click(SimpleNamespace(x=610, y=384))
         self.assertFalse(self.app.provider.current().is_playing)
@@ -64,7 +81,8 @@ class AppTests(unittest.TestCase):
         self.assertAlmostEqual(self.app.provider.current().progress_fraction, 0.5, places=4)
 
     def test_help_blocks_underlying_music_controls(self):
-        self.app.set_mode("spotify")
+        self.app.provider.play()
+        self.app.set_mode("music")
         self.app.help_open = True
         self.render()
         self.app._click(SimpleNamespace(x=610, y=384))

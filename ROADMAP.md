@@ -11,42 +11,47 @@
 ## Phase 1 — Development setup
 - [ ] Install Raspberry Pi OS
 - [ ] Configure Wi-Fi and SSH
-- [ ] Create a Python virtual environment
-- [ ] Add formatting, linting, and tests
-- [ ] Create safe configuration for secrets
+- [x] Create a Python virtual environment script
+- [x] Add tests and safe configuration for secrets
+- [ ] Add formatting and linting
+- [ ] Flash and boot the Pi
 
 ## Phase 2 — Screen eyes
 - [ ] Connect the display
-- [ ] Render a static face
-- [ ] Add blinking and expressions
-- [ ] Add listening, thinking, talking, sleeping, and error states
+- [x] Render the face in the laptop simulator
+- [x] Add blinking and expressions
+- [x] Add listening, thinking, talking, sleeping, and error states
+- [ ] Confirm the face on the physical 480 × 320 screen
 
 ## Phase 3 — Hardware I/O
-- [ ] Connect a push button
+- [x] Add push-to-talk button code (GPIO 17, with a keyboard fallback)
+- [ ] Connect the physical button and confirm it
 - [ ] Add a status LED
-- [ ] Test microphone input
-- [ ] Test speaker output
-- [ ] Document wiring and pin assignments
+- [ ] Test microphone input on the Pi
+- [ ] Test speaker output on the Pi
+- [x] Document wiring and pin assignments
 
 ## Phase 4 — Voice pipeline
-- [ ] Record audio
-- [ ] Convert speech to text
-- [ ] Generate an AI response
-- [ ] Convert text to speech
-- [ ] Add timeouts and useful error messages
+- [x] Record audio (arecord, 16 kHz mono WAV)
+- [x] Convert speech to text (xAI `/v1/stt`)
+- [x] Generate a Grok response (`/v1/chat/completions`)
+- [x] Convert text to speech (xAI `/v1/tts`, espeak-ng backup)
+- [x] Add timeouts and useful error messages
+- [ ] Validate the loop on the assembled Pi with a live key
 
 ## Phase 5 — Robot behavior
-- [ ] Add a state machine
-- [ ] Synchronize eye animations with listening and speaking
-- [ ] Add idle and sleep behavior
-- [ ] Recover gracefully from Wi-Fi/API failures
+- [x] Add a mode controller (`Robot.set_mode` / `Robot.say`)
+- [x] Synchronize eye animations with listening and speaking
+- [x] Add idle and automatic music-screen behavior
+- [x] Recover gracefully from missing Wi-Fi, key, or microphone
 
 ## Phase 6 — Physical build
 - [x] Create basic head-shell CAD foundation
+- [x] Draft a removable rear cover
 - [ ] Measure screen thickness, rear components, mounting holes, and connectors
 - [ ] Add screen retention features
 - [ ] Add Raspberry Pi mounts, ports, ventilation, and neck connection
-- [ ] Design removable rear cover and fasteners
+- [ ] Finish rear-cover fasteners
 - [ ] Print and test-fit the enclosure
 - [ ] Assemble the prototype
 

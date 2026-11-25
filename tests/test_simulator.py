@@ -1,7 +1,5 @@
 import unittest
 
-from robot_display.models import RobotState
-from robot_display.simulator import SimulatorController
 from robot_display.spotify import DemoSpotifyProvider
 
 
@@ -17,6 +15,7 @@ class PlaybackTests(unittest.TestCase):
     def setUp(self):
         self.clock = Clock()
         self.player = DemoSpotifyProvider(self.clock)
+        self.player.play()
 
     def test_reads_do_not_advance_playback(self):
         self.clock.now = 1.5
@@ -59,50 +58,6 @@ class PlaybackTests(unittest.TestCase):
         self.player.seek(2)
         track = self.player.current()
         self.assertEqual(track.progress_ms, track.duration_ms - 1)
-
-
-class ConversationTests(unittest.TestCase):
-    def setUp(self):
-        self.clock = Clock()
-        self.controller = SimulatorController(self.clock)
-
-    def test_full_sequence_opens_music_once(self):
-        self.controller.start_demo()
-        for now, state in ((0, RobotState.LISTENING), (2.5, RobotState.THINKING),
-                           (4.5, RobotState.SPEAKING), (7.5, RobotState.HAPPY)):
-            self.clock.now = now
-            self.assertFalse(self.controller.update())
-            self.assertEqual(self.controller.state, state)
-        self.clock.now = 9
-        self.assertTrue(self.controller.update())
-        self.assertEqual(self.controller.mode, "spotify")
-        self.assertFalse(self.controller.update())
-
-    def test_switch_screen_cancels_pending_demo(self):
-        self.controller.start_demo()
-        self.controller.set_mode("eyes")
-        self.clock.now = 20
-        self.assertFalse(self.controller.update())
-        self.assertEqual(self.controller.mode, "eyes")
-        self.assertEqual(self.controller.state, RobotState.IDLE)
-
-    def test_manual_expression_overrides_demo_and_music(self):
-        self.controller.start_demo()
-        self.controller.set_state(RobotState.SLEEPING)
-        self.clock.now = 20
-        self.controller.update()
-        self.assertEqual(self.controller.state, RobotState.SLEEPING)
-        self.assertEqual(self.controller.mode, "eyes")
-        self.controller.set_mode("spotify")
-        self.controller.set_state(RobotState.HAPPY)
-        self.assertEqual(self.controller.mode, "eyes")
-
-    def test_restart_uses_new_start_time(self):
-        self.controller.start_demo()
-        self.clock.now = 5
-        self.controller.start_demo()
-        self.controller.update()
-        self.assertEqual(self.controller.state, RobotState.LISTENING)
 
 
 if __name__ == "__main__":
