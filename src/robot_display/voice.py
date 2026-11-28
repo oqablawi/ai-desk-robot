@@ -20,6 +20,7 @@ import threading
 from pathlib import Path
 from typing import Callable
 
+from .diagnostics import log_voice_error
 from .ai import (
     DEFAULT_BASE_URL,
     DEFAULT_MODEL,
@@ -229,7 +230,8 @@ class VoiceLoop:
                 self.history.append((user_text, reply.say))
                 self.history = self.history[-4:]
             self._deliver(reply)
-        except Exception:
+        except Exception as exc:
+            log_voice_error("voice conversation", exc)
             self.robot.set_mode("error")
         finally:
             if wav_path is not None:
@@ -246,7 +248,8 @@ class VoiceLoop:
             return "hello"
         try:
             return transcribe_audio(wav_path, self.api_key, base_url=self.base_url)
-        except Exception:
+        except Exception as exc:
+            log_voice_error("speech-to-text", exc)
             return ""
 
     def _deliver(self, reply: GrokReply) -> None:
@@ -279,8 +282,8 @@ class VoiceLoop:
                         return
                 finally:
                     path.unlink(missing_ok=True)
-            except Exception:
-                pass
+            except Exception as exc:
+                log_voice_error("text-to-speech", exc)
         if not speak_with_espeak(text):
             # Last resort: the face still shows speaking, with no audio.
             return

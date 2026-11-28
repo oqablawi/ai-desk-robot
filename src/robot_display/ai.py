@@ -12,6 +12,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
+from .diagnostics import log_voice_error
 from .models import normalize_mode
 
 DEFAULT_BASE_URL = "https://api.x.ai/v1"
@@ -170,7 +171,8 @@ def ask_grok(
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
             payload = json.load(response)
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        log_voice_error("Grok chat API", exc)
         return GrokReply(
             mode="error",
             say="I had trouble reaching Grok. Check the Wi-Fi and API key.",
